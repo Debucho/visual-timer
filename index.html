@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>60分ビジュアルタイマー</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3a3d42">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap">
+<style>
+/* VOICE: calm, tactile desk object; nothing that nags
+   IDEA: a soft silicone desk timer whose red disk shrinks as time passes
+   PICTURE: the timer itself, large, at the top; it is the control
+   COLOUR and TYPE: body colour chosen by the user, white face, one alarm red; M PLUS Rounded
+   LAYOUT: card + timer centred, controls in one calm column below */
+:root{color-scheme:light dark;--bg:light-dark(#eceeef,#16181b);--ink:light-dark(#1d2024,#eef0f2);--sub:light-dark(#5d646c,#a3abb3);--panel:light-dark(#ffffff,#22262b);--line:light-dark(#d6dade,#363b42);--red:#e8251a;--body:#3a3d42;--face:#fbfbf9}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "M PLUS Rounded 1c",system-ui,sans-serif;overflow-x:clip}
+main{max-width:560px;margin:0 auto;padding:20px max(4vw,14px) 40px}
+h1{font-size:18px;font-weight:700;margin:0 0 12px;color:var(--sub)}
+.card{display:block;width:min(78%,360px);margin:0 auto -14px;position:relative;z-index:2;background:var(--panel);border:1px solid var(--line);border-radius:14px 14px 6px 6px;padding:8px 14px;font:700 17px/1.3 inherit;color:var(--ink);text-align:center;box-shadow:0 2px 0 var(--line)}
+.card::placeholder{color:var(--sub);font-weight:500}
+.unit{position:relative;width:min(100%,440px);margin:0 auto;aspect-ratio:1;border-radius:22%;background:var(--body);box-shadow:inset 0 -10px 0 rgba(0,0,0,.18),inset 0 6px 0 rgba(255,255,255,.18),0 18px 30px -14px rgba(0,0,0,.45);padding:5.5%;transition:background .3s}
+.unit.ring{animation:pulse .6s ease-in-out infinite alternate}
+@keyframes pulse{to{box-shadow:inset 0 -10px 0 rgba(0,0,0,.18),0 0 0 10px rgba(232,37,26,.45),0 18px 30px -14px rgba(0,0,0,.45)}}
+@media (prefers-reduced-motion:reduce){.unit.ring{animation:none;outline:8px solid var(--red)}}
+svg#dial{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+svg#dial:active{cursor:grabbing}
+.readout{text-align:center;margin:14px 0 4px;font-size:clamp(28px,8vw,40px);font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;white-space:nowrap}
+.readout.hide{visibility:hidden}
+.state{text-align:center;color:var(--sub);font-size:14px;min-height:1.5em;margin:0 0 18px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
+.box h2{font-size:14px;font-weight:700;margin:0 0 8px;color:var(--sub)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,input[type=time]{font:inherit;font-size:16px;min-height:44px;border-radius:12px;border:1px solid var(--line);background:light-dark(#f4f5f6,#2b3036);color:var(--ink);padding:0 14px}
+button{cursor:pointer;font-weight:700}
+button:focus-visible,input:focus-visible,.card:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pre{flex:1 1 56px}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;min-height:1.2em}
+.sw{width:44px;height:44px;border-radius:50%;padding:0;border:3px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+.sw.on{box-shadow:0 0 0 3px var(--ink)}
+.help{font-size:13px;color:var(--sub);margin:16px 4px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>60分ビジュアルタイマー</h1>
+<input class="card" id="card" maxlength="30" placeholder="いまやること・次の予定" aria-label="メモ（ホワイトボードカード）">
+<div class="unit" id="unit">
+<svg id="dial" viewBox="0 0 400 400" role="slider" aria-label="残り時間（分）" aria-valuemin="0" aria-valuemax="60" tabindex="0">
+<circle cx="200" cy="200" r="196" fill="var(--face)"/>
+<g id="ticks"></g>
+<g id="nums" font-family="M PLUS Rounded 1c, sans-serif" font-weight="800" font-size="24" fill="#2a2d31" text-anchor="middle" dominant-baseline="central"></g>
+<circle cx="200" cy="200" r="138" fill="#f1f1ee"/>
+<path id="wedge" fill="var(--red)"/>
+<circle id="full" cx="200" cy="200" r="138" fill="var(--red)" visibility="hidden"/>
+<circle cx="200" cy="200" r="30" fill="#fdfdfc" stroke="#d8d8d4" stroke-width="2"/>
+<circle cx="200" cy="200" r="30" fill="none" stroke="rgba(0,0,0,.08)" stroke-width="6"/>
+<path id="icon" fill="#2a2d31"/>
+</svg>
+</div>
+<div class="readout" id="readout">0:00</div>
+<p class="state" id="state">円盤をなぞって時間をセット</p>
+
+<div class="box">
+<h2>すぐセット</h2>
+<div class="row" id="presets"></div>
+</div>
+
+<div class="box">
+<h2>次の予定までセット</h2>
+<div class="row">
+<input type="time" id="until" aria-label="次の予定の時刻">
+<button id="untilBtn">この時刻まで</button>
+</div>
+<p class="note" id="untilNote"></p>
+</div>
+
+<div class="box">
+<h2>設定</h2>
+<div class="row">
+<button id="alarmBtn" aria-pressed="true">アラーム</button>
+<button id="digitBtn" aria-pressed="true">数字表示</button>
+<button id="wakeBtn" aria-pressed="false">画面を消さない</button>
+<button id="fsBtn">全画面</button>
+</div>
+<h2 style="margin-top:14px">本体の色</h2>
+<div class="row" id="swatches"></div>
+</div>
+
+<p class="help">円盤を指でなぞって離すとスタートします。真ん中のつまみをタップすると一時停止・再開します。</p>
+</main>
+<script>
+{
+const C=200,R=138,$=id=>document.getElementById(id);
+const dial=$('dial'),wedge=$('wedge'),full=$('full'),icon=$('icon'),unit=$('unit');
+const store={get(k,d){try{const v=localStorage.getItem('vt_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('vt_'+k,JSON.stringify(v))}catch(e){}}};
+const pt=(r,deg)=>{const t=deg*Math.PI/180;return[C-r*Math.sin(t),C-r*Math.cos(t)]};
+
+/* face: ticks every minute, numbers every 5 (counter-clockwise from top) */
+let tk='',nm='';
+for(let i=0;i<60;i++){const maj=i%5===0,[x1,y1]=pt(maj?142:146,i*6),[x2,y2]=pt(maj?160:154,i*6);tk+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#2a2d31" stroke-width="${maj?4:2}" stroke-linecap="round"/>`;if(maj){const[x,y]=pt(178,i*6);nm+=`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}">${i}</text>`}}
+$('ticks').innerHTML=tk;$('nums').innerHTML=nm;
+
+/* state */
+let endAt=null,held=0,dragging=false,lastMin=null,ringing=null,actx=null,wake=null;
+let alarm=store.get('alarm',true),digits=store.get('digits',true),color=store.get('color','#3a3d42');
+const remain=()=>endAt?Math.max(0,endAt-Date.now()):held;
+const fmt=ms=>{const s=Math.ceil(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+
+function render(){
+  const ms=remain(),m=ms/60000;
+  if(m>=59.995){full.setAttribute('visibility','visible');wedge.setAttribute('d','')}
+  else{full.setAttribute('visibility','hidden');
+    if(m<=0)wedge.setAttribute('d','');
+    else{const[x,y]=pt(R,m*6);wedge.setAttribute('d',`M${C} ${C}L${C} ${C-R}A${R} ${R} 0 ${m>30?1:0} 0 ${x.toFixed(2)} ${y.toFixed(2)}Z`)}}
+  icon.setAttribute('d',!endAt&&held>0&&!dragging?'M192 186L192 214L214 200Z':endAt?'M190 188h7v24h-7zM203 188h7v24h-7z':'');
+  $('readout').textContent=fmt(ms);
+  dial.setAttribute('aria-valuenow',Math.round(m));
+  $('state').textContent=ringing?'時間です（タップで止める）':dragging?`${Math.round(m)}分にセット中`:endAt?'進行中':held>0?'一時停止中（つまみで再開）':'円盤をなぞって時間をセット';
+}
+
+/* audio: unlocked on first touch */
+function audio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}}
+function beep(){if(!actx)return;const t=actx.currentTime;for(let i=0;i<3;i++){const o=actx.createOscillator(),g=actx.createGain();o.type='triangle';o.frequency.value=988;g.gain.setValueAtTime(0,t+i*.22);g.gain.linearRampToValueAtTime(.35,t+i*.22+.02);g.gain.linearRampToValueAtTime(0,t+i*.22+.16);o.connect(g).connect(actx.destination);o.start(t+i*.22);o.stop(t+i*.22+.18)}}
+function ring(){unit.classList.add('ring');let n=0;if(alarm)beep();ringing=setInterval(()=>{if(alarm&&++n<8)beep();else if(n>=8)stopRing()},1200);setTimeout(stopRing,10000)}
+function stopRing(){if(ringing){clearInterval(ringing);ringing=null}unit.classList.remove('ring');render()}
+
+function start(ms){stopRing();held=0;endAt=ms>0?Date.now()+ms:null;render()}
+function toggle(){audio();if(ringing)return stopRing();if(endAt){held=endAt-Date.now();endAt=null}else if(held>0){endAt=Date.now()+held;held=0}render()}
+
+/* dragging the disk */
+function minuteAt(e){const b=dial.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*400-C,y=(e.clientY-b.top)/b.height*400-C;
+  let d=Math.atan2(-x,-y)*180/Math.PI;if(d<0)d+=360;let m=Math.round(d/6);
+  if(lastMin!==null){if(lastMin>=45&&m<=15)m=60;else if(lastMin<=15&&m>=45)m=0}
+  return{m,dist:Math.hypot(x,y)}}
+dial.addEventListener('pointerdown',e=>{audio();const{m,dist}=minuteAt(e);
+  if(ringing){stopRing();return}
+  if(dist<34){toggle();return}
+  dragging=true;lastMin=null;endAt=null;dial.setPointerCapture(e.pointerId);
+  const r=minuteAt(e);held=r.m*60000;lastMin=r.m;render()});
+dial.addEventListener('pointermove',e=>{if(!dragging)return;const{m}=minuteAt(e);lastMin=m;held=m*60000;render()});
+const endDrag=()=>{if(!dragging)return;dragging=false;lastMin=null;start(held)};
+dial.addEventListener('pointerup',endDrag);dial.addEventListener('pointercancel',endDrag);
+dial.addEventListener('keydown',e=>{const step={ArrowUp:1,ArrowRight:1,ArrowDown:-1,ArrowLeft:-1}[e.key];if(step){e.preventDefault();audio();const m=Math.min(60,Math.max(0,Math.round(remain()/60000)+step));start(m*60000)}else if(e.key===' '||e.key==='Enter'){e.preventDefault();toggle()}});
+
+/* presets */
+$('presets').innerHTML=[5,15,25,30,45,60].map(m=>`<button class="pre" data-m="${m}">${m}分</button>`).join('');
+$('presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;audio();start(+b.dataset.m*60000)});
+
+/* until next appointment */
+$('untilBtn').addEventListener('click',()=>{audio();const v=$('until').value,note=$('untilNote');
+  if(!v){note.textContent='時刻を入れてください。';return}
+  const[h,mi]=v.split(':').map(Number),t=new Date();t.setHours(h,mi,0,0);let diff=t-Date.now();
+  if(diff<=0){note.textContent='その時刻はもう過ぎています。';return}
+  if(diff>3600000){note.textContent=`予定まで あと${Math.floor(diff/60000)}分。60分を超えるので、まず60分をセットしました。`;diff=3600000}
+  else note.textContent=`${v} までをセットしました。`;
+  start(diff)});
+{const n=new Date(Date.now()+3600000);$('until').value=String(n.getHours()).padStart(2,'0')+':00'}
+
+/* card memo */
+const card=$('card');card.value=store.get('card','');card.addEventListener('input',()=>store.set('card',card.value));
+
+/* settings */
+function setBtn(b,on){b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)}
+setBtn($('alarmBtn'),alarm);setBtn($('digitBtn'),digits);$('readout').classList.toggle('hide',!digits);
+$('alarmBtn').addEventListener('click',()=>{audio();alarm=!alarm;store.set('alarm',alarm);setBtn($('alarmBtn'),alarm);if(alarm)beep()});
+$('digitBtn').addEventListener('click',()=>{digits=!digits;store.set('digits',digits);setBtn($('digitBtn'),digits);$('readout').classList.toggle('hide',!digits)});
+async function lock(){try{wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null;if(!document.hidden)setBtn($('wakeBtn'),false)})}catch(e){wake=null}setBtn($('wakeBtn'),!!wake)}
+$('wakeBtn').addEventListener('click',async()=>{if(wake){const w=wake;wake=null;try{await w.release()}catch(e){}setBtn($('wakeBtn'),false)}else{await lock();if(!wake)$('state').textContent='この環境では画面の点灯を保てません'}});
+$('fsBtn').addEventListener('click',()=>{try{const p=document.fullscreenElement?document.exitFullscreen():unit.requestFullscreen();if(p&&p.catch)p.catch(()=>{})}catch(e){}});
+
+const colors=[['#3a3d42','チャコール'],['#f2f1ec','ホワイト'],['#2f9fb3','ラグーン'],['#f0b429','サンシャイン'],['#7a9a5a','オリーブ'],['#e7a4b4','ピンク']];
+$('swatches').innerHTML=colors.map(([c,n])=>`<button class="sw" data-c="${c}" style="background:${c}" aria-label="${n}" title="${n}"></button>`).join('');
+function paint(c){color=c;unit.style.setProperty('--body',c);store.set('color',c);for(const b of document.querySelectorAll('.sw'))b.classList.toggle('on',b.dataset.c===c)}
+$('swatches').addEventListener('click',e=>{const b=e.target.closest('.sw');if(b)paint(b.dataset.c)});
+paint(color);
+
+/* clock: rAF while visible, interval keeps the alarm working in the background */
+function tick(){if(endAt&&Date.now()>=endAt){endAt=null;held=0;ring()}render()}
+function loop(){tick();requestAnimationFrame(loop)}
+setInterval(()=>{if(document.hidden)tick()},500);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('wakeBtn').classList.contains('on')&&!wake)lock()});
+requestAnimationFrame(loop);
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>

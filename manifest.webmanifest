@@ -1,0 +1,17 @@
+{
+  "name": "60分ビジュアルタイマー",
+  "short_name": "タイマー",
+  "description": "赤い円盤で残り時間が見える60分タイマー",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eceeef",
+  "theme_color": "#3a3d42",
+  "lang": "ja",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
